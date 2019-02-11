@@ -12,7 +12,7 @@ impl Copy for AttrMacro {}
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Response<'a> {
-    Capabilities(Vec<&'a str>),
+    Capabilities(Vec<Capability<'a>>),
     Continue {
         code: Option<ResponseCode<'a>>,
         information: Option<&'a str>,
@@ -79,6 +79,13 @@ pub enum MailboxDatum<'a> {
         status: Vec<StatusAttribute>,
     },
     Recent(u32),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum Capability<'a> {
+    /// Defined by [SASL]()
+    Auth(&'a str),
+    Atom(&'a str),
 }
 
 #[derive(Debug, Eq, PartialEq)]

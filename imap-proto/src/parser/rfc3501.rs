@@ -166,16 +166,36 @@ named!(resp_text_code<ResponseCode>, do_parse!(
     (coded)
 ));
 
-named!(capability<&str>, do_parse!(
-    tag_s!(" ") >>
-    atom: map_res!(take_till1_s!(atom_specials), str::from_utf8) >>
-    (atom)
+named!(capability_auth<Capability>, do_parse!(
+    tag_s!("AUTH=") >>
+    auth: atom >>
+    (Capability::Auth(auth))
+));
+
+named!(capability_atom<Capability>, do_parse!(
+    not!(tag!("IMAP4rev1")) >>
+    atom: atom >>
+    (Capability::Atom(atom))
+));
+
+named!(capability<Capability>, do_parse!(
+    tag!(" ") >>
+    capability: alt!(
+        capability_auth |
+        capability_atom
+    ) >>
+    (capability)
 ));
 
 named!(capability_data<Response>, do_parse!(
     tag_s!("CAPABILITY") >>
-    capabilities: many1!(capability) >>
-    (Response::Capabilities(capabilities))
+    capabilities_a: many0!(capability) >>
+    tag_s!(" IMAP4rev1") >>
+    capabilities_b: many0!(capability) >>
+    (Response::Capabilities(capabilities_b.into_iter().fold(capabilities_a, |mut acc, next| {
+        acc.push(next);
+        acc
+    })))
 ));
 
 named!(mailbox_data_search<Response>, do_parse!(
@@ -678,10 +698,39 @@ mod tests {
         }
     }
 
-      #[test]
+    #[test]
     fn test_addresses() {
         match ::parser::rfc3501::address(b"(\"John Klensin\" NIL \"KLENSIN\" \"MIT.EDU\") ") {
             Ok((_, _address)) => {},
+            rsp @ _ => panic!("unexpected response {:?}", rsp)
+        }
+    }
+
+    #[test]
+    fn test_mailbox_data_recent() {
+        match ::parser::rfc3501::mailbox_data_recent(b"5 RECENT\r\n") {
+            Ok((_, Response::MailboxData(MailboxDatum::Recent(num)))) => assert_eq!(5, num),
+            rsp @ _ => panic!("unexpected response {:?}", rsp)
+        }
+    }
+
+    #[test]
+    fn test_capability_data() {
+        match ::parser::rfc3501::capability_data(b"CAPABILITY IMAP4rev1\r\n") {
+            Ok((_, Response::Capabilities(capabilities))) =>
+                assert_eq!(Vec::<Capability>::new(), capabilities),
+            rsp @ _ => panic!("unexpected response {:?}", rsp)
+        }
+
+        match ::parser::rfc3501::capability_data(b"CAPABILITY XPIG-LATIN IMAP4rev1 STARTTLS AUTH=GSSAPI\r\n") {
+            Ok((_, Response::Capabilities(capabilities))) =>
+                assert_eq!(vec!(Capability::Atom("XPIG-LATIN"), Capability::Atom("STARTTLS"), Capability::Auth("GSSAPI")), capabilities),
+            rsp @ _ => panic!("unexpected response {:?}", rsp)
+        }
+
+        match ::parser::rfc3501::capability_data(b"CAPABILITY IMAP4rev1 AUTH=GSSAPI AUTH=PLAIN\r\n") {
+            Ok((_, Response::Capabilities(capabilities))) =>
+                assert_eq!(vec!(Capability::Auth("GSSAPI"), Capability::Auth("PLAIN")), capabilities),
             rsp @ _ => panic!("unexpected response {:?}", rsp)
         }
     }
