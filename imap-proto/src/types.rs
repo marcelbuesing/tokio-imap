@@ -83,6 +83,7 @@ pub enum MailboxDatum<'a> {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Capability<'a> {
+    IMAP4rev1,
     /// Defined by [SASL]()
     Auth(&'a str),
     Atom(&'a str),

@@ -192,10 +192,15 @@ named!(capability_data<Response>, do_parse!(
     capabilities_a: many0!(capability) >>
     tag_s!(" IMAP4rev1") >>
     capabilities_b: many0!(capability) >>
-    (Response::Capabilities(capabilities_b.into_iter().fold(capabilities_a, |mut acc, next| {
-        acc.push(next);
-        acc
-    })))
+    ({
+        let mut capabilities_ab = Vec::new();
+        capabilities_ab.push(Capability::IMAP4rev1);
+        for next in capabilities_b {
+            capabilities_ab.push(next);
+        }
+
+        Response::Capabilities(capabilities_ab)
+    })
 ));
 
 named!(mailbox_data_search<Response>, do_parse!(
